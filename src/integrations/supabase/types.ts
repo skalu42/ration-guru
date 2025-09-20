@@ -14,7 +14,205 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cart_sessions: {
+        Row: {
+          automation_log: string | null
+          created_at: string
+          id: string
+          items: Json
+          list_id: string
+          platform: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          automation_log?: string | null
+          created_at?: string
+          id?: string
+          items: Json
+          list_id: string
+          platform: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          automation_log?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          list_id?: string
+          platform?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_sessions_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "ration_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_cache: {
+        Row: {
+          created_at: string
+          id: string
+          item_name: string
+          last_updated: string
+          pack_size: string | null
+          platform: string
+          price: number
+          product_name: string
+          product_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_name: string
+          last_updated?: string
+          pack_size?: string | null
+          platform: string
+          price: number
+          product_name: string
+          product_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_name?: string
+          last_updated?: string
+          pack_size?: string | null
+          platform?: string
+          price?: number
+          product_name?: string
+          product_url?: string | null
+        }
+        Relationships: []
+      }
+      price_comparisons: {
+        Row: {
+          bigbasket_price: number | null
+          bigbasket_product_name: string | null
+          bigbasket_url: string | null
+          created_at: string
+          id: string
+          item_name: string
+          jiomart_price: number | null
+          jiomart_product_name: string | null
+          jiomart_url: string | null
+          list_id: string
+          quantity: string | null
+          recommended_platform: string | null
+          savings: number | null
+        }
+        Insert: {
+          bigbasket_price?: number | null
+          bigbasket_product_name?: string | null
+          bigbasket_url?: string | null
+          created_at?: string
+          id?: string
+          item_name: string
+          jiomart_price?: number | null
+          jiomart_product_name?: string | null
+          jiomart_url?: string | null
+          list_id: string
+          quantity?: string | null
+          recommended_platform?: string | null
+          savings?: number | null
+        }
+        Update: {
+          bigbasket_price?: number | null
+          bigbasket_product_name?: string | null
+          bigbasket_url?: string | null
+          created_at?: string
+          id?: string
+          item_name?: string
+          jiomart_price?: number | null
+          jiomart_product_name?: string | null
+          jiomart_url?: string | null
+          list_id?: string
+          quantity?: string | null
+          recommended_platform?: string | null
+          savings?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_comparisons_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "ration_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ration_lists: {
+        Row: {
+          created_at: string
+          extracted_items: Json | null
+          id: string
+          image_url: string | null
+          raw_ocr_text: string | null
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          extracted_items?: Json | null
+          id?: string
+          image_url?: string | null
+          raw_ocr_text?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          extracted_items?: Json | null
+          id?: string
+          image_url?: string | null
+          raw_ocr_text?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
