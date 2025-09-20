@@ -1,1 +1,10 @@
 project_id = "xcmpxgymwivfkxjqvjos"
+
+[functions.process-ocr]
+verify_jwt = true
+
+[functions.scrape-prices]
+verify_jwt = true
+
+[functions.automate-cart]
+verify_jwt = true

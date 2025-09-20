@@ -1,81 +1,29 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { StepIndicator } from "@/components/ui/step-indicator";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { PriceComparisonTable } from "@/components/ui/price-comparison-table";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, Eye, ShoppingCart, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle, Loader2, RotateCcw, Download, ExternalLink, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { apiService, RationList, PriceComparison } from "@/services/api";
 
 interface MainAppProps {
   onBack: () => void;
 }
 
-// Mock data for demonstration
-const mockOCRResults = [
-  { id: '1', text: 'आटा 5 किलो', normalized: 'Atta 5kg' },
-  { id: '2', text: 'चावल 10 किलो', normalized: 'Rice 10kg' },
-  { id: '3', text: 'चीनी 2 किलो', normalized: 'Sugar 2kg' },
-  { id: '4', text: 'दाल तुअर 3 किलो', normalized: 'Toor Dal 3kg' },
-  { id: '5', text: 'तेल 2 लीटर', normalized: 'Cooking Oil 2L' },
-];
-
-const mockPriceData = [
-  {
-    id: '1',
-    item: 'Atta (Wheat Flour)',
-    quantity: '5kg',
-    jioMartPrice: 240,
-    bigBasketPrice: 235,
-    recommendedPlatform: 'BigBasket' as const,
-    savings: 5,
-  },
-  {
-    id: '2',
-    item: 'Basmati Rice',
-    quantity: '10kg',
-    jioMartPrice: 520,
-    bigBasketPrice: 540,
-    recommendedPlatform: 'JioMart' as const,
-    savings: 20,
-  },
-  {
-    id: '3',
-    item: 'Sugar',
-    quantity: '2kg',
-    jioMartPrice: 90,
-    bigBasketPrice: 95,
-    recommendedPlatform: 'JioMart' as const,
-    savings: 5,
-  },
-  {
-    id: '4',
-    item: 'Toor Dal',
-    quantity: '3kg',
-    jioMartPrice: 180,
-    bigBasketPrice: 175,
-    recommendedPlatform: 'BigBasket' as const,
-    savings: 5,
-  },
-  {
-    id: '5',
-    item: 'Sunflower Oil',
-    quantity: '2L',
-    jioMartPrice: 280,
-    bigBasketPrice: 290,
-    recommendedPlatform: 'JioMart' as const,
-    savings: 10,
-  },
-];
-
 export const MainApp = ({ onBack }: MainAppProps) => {
+  const { toast } = useToast();
+  const { user, signOut } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [ocrResults, setOcrResults] = useState<typeof mockOCRResults>([]);
-  const [priceResults, setPriceResults] = useState<typeof mockPriceData>([]);
-  const { toast } = useToast();
+  const [ocrResults, setOcrResults] = useState<any[]>([]);
+  const [priceResults, setPriceResults] = useState<PriceComparison[]>([]);
+  const [currentList, setCurrentList] = useState<RationList | null>(null);
+  const [imageData, setImageData] = useState<string>('');
 
   const steps = [
     { title: "Upload Image", description: "Upload your ration list" },
@@ -84,87 +32,193 @@ export const MainApp = ({ onBack }: MainAppProps) => {
     { title: "Cart Automation", description: "Add items to cart" },
   ];
 
-  const handleImageUpload = (file: File) => {
-    setUploadedFile(file);
-    setCurrentStep(1);
-    simulateOCRProcessing();
+  const handleImageUpload = async (file: File) => {
+    try {
+      setUploadedFile(file);
+      setCurrentStep(1);
+      setIsProcessing(true);
+
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Data = e.target?.result as string;
+        setImageData(base64Data);
+        
+        // Create ration list
+        const list = await apiService.createRationList(`Ration List - ${new Date().toLocaleDateString()}`);
+        setCurrentList(list);
+        
+        // Process OCR
+        await processOCR(base64Data, list.id);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+    }
   };
 
-  const simulateOCRProcessing = async () => {
-    setIsProcessing(true);
-    
-    // Simulate OCR processing time
-    setTimeout(() => {
-      setOcrResults(mockOCRResults);
-      setCurrentStep(2);
-      setIsProcessing(false);
-      toast({
-        title: "OCR Complete",
-        description: "Successfully extracted items from your ration list!",
-      });
+  const processOCR = async (imageData: string, listId: string) => {
+    try {
+      const result = await apiService.processOCR(imageData, listId);
       
-      // Auto-proceed to price comparison
-      setTimeout(() => {
-        simulatePriceComparison();
-      }, 1000);
-    }, 3000);
-  };
-
-  const simulatePriceComparison = async () => {
-    setIsProcessing(true);
-    
-    // Simulate price comparison processing
-    setTimeout(() => {
-      setPriceResults(mockPriceData);
-      setCurrentStep(3);
+      if (result.success) {
+        setOcrResults(result.extracted_items || []);
+        setCurrentStep(2);
+        toast({
+          title: "OCR processing complete!",
+          description: "Extracted items from your ration list.",
+        });
+        
+        // Start price comparison
+        await comparePrices(listId, result.extracted_items || []);
+      } else {
+        throw new Error(result.error || 'OCR processing failed');
+      }
+    } catch (error) {
+      console.error('OCR Error:', error);
+      toast({
+        title: "OCR processing failed",
+        description: "Failed to extract text from image. Please try again.",
+        variant: "destructive",
+      });
+      setCurrentStep(0);
+    } finally {
       setIsProcessing(false);
-      toast({
-        title: "Price Comparison Complete",
-        description: "Found the best deals across platforms!",
-      });
-    }, 2000);
+    }
   };
 
-  const handleCartAutomation = () => {
-    toast({
-      title: "Cart Automation Started",
-      description: "Opening platforms and adding items to cart...",
-    });
-    
-    // Simulate cart automation
-    setTimeout(() => {
+  const comparePrices = async (listId: string, items: any[]) => {
+    try {
+      setIsProcessing(true);
+      const comparisons = await apiService.scrapePrices(listId, items);
+      
+      // Convert to expected format
+      const formattedResults = comparisons.map((comp: any) => ({
+        id: comp.id,
+        item: comp.item_name,
+        quantity: comp.quantity,
+        jioMartPrice: comp.jiomart_price || 0,
+        bigBasketPrice: comp.bigbasket_price || 0,
+        recommendedPlatform: (comp.recommended_platform === 'bigbasket' ? 'BigBasket' : 'JioMart') as 'JioMart' | 'BigBasket',
+        savings: comp.savings || 0
+      }));
+      
+      setPriceResults(formattedResults);
+      
+      setPriceResults(formattedResults);
+      setCurrentStep(3);
       toast({
-        title: "Success!",
-        description: "Items added to cart on recommended platforms.",
+        title: "Price comparison complete!",
+        description: "Found the best deals across platforms.",
       });
-    }, 2000);
+    } catch (error) {
+      console.error('Price comparison error:', error);
+      toast({
+        title: "Price comparison failed",
+        description: "Failed to compare prices. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCartAutomation = async (platform: 'jiomart' | 'bigbasket') => {
+    if (!currentList) return;
+    
+    try {
+      setIsProcessing(true);
+      
+      // Get items for the selected platform
+      const platformItems = priceResults
+        .filter(item => 
+          (platform === 'jiomart' && item.recommendedPlatform === 'JioMart') ||
+          (platform === 'bigbasket' && item.recommendedPlatform === 'BigBasket')
+        )
+        .map(item => ({
+          item_name: item.item,
+          quantity: item.quantity,
+          price: platform === 'jiomart' ? item.jioMartPrice : item.bigBasketPrice
+        }));
+
+      await apiService.automateCart(currentList.id, platform, platformItems);
+      
+      toast({
+        title: "Cart automation complete!",
+        description: "Items have been processed for your cart.",
+      });
+
+      // Open platform URL
+      const platformUrl = platform === 'jiomart' ? 'https://www.jiomart.com' : 'https://www.bigbasket.com';
+      window.open(platformUrl, '_blank');
+    } catch (error) {
+      console.error('Cart automation error:', error);
+      toast({
+        title: "Cart automation failed",
+        description: "Failed to automate cart. Please add items manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const resetProcess = () => {
     setCurrentStep(0);
     setUploadedFile(null);
+    setIsProcessing(false);
     setOcrResults([]);
     setPriceResults([]);
-    setIsProcessing(false);
+    setCurrentList(null);
+    setImageData('');
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-accent/20">
       {/* Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={onBack}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-              <h1 className="text-xl font-semibold">RationCart AI Assistant</h1>
-            </div>
-            <Button variant="outline" size="sm" onClick={resetProcess}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reset
+            <Button
+              variant="ghost"
+              onClick={onBack}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Home
             </Button>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Welcome, {user?.email}
+              </span>
+              <Button
+                variant="outline"
+                onClick={resetProcess}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -178,8 +232,10 @@ export const MainApp = ({ onBack }: MainAppProps) => {
         {currentStep === 0 && (
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold mb-2">Upload Your Ration List</h2>
-              <p className="text-muted-foreground">
+              <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
+                Upload Your Ration List
+              </h2>
+              <p className="text-muted-foreground text-lg">
                 Upload an image of your ration list in Hindi or English, or a PDF document
               </p>
             </div>
@@ -189,11 +245,11 @@ export const MainApp = ({ onBack }: MainAppProps) => {
 
         {currentStep === 1 && (
           <div className="max-w-2xl mx-auto">
-            <Card>
+            <Card className="border-primary/20 shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl">
                   {isProcessing ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
                   ) : (
                     <CheckCircle className="w-5 h-5 text-green-500" />
                   )}
@@ -202,19 +258,24 @@ export const MainApp = ({ onBack }: MainAppProps) => {
               </CardHeader>
               <CardContent>
                 {isProcessing ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 mx-auto mb-4 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-lg font-medium">Processing your image...</p>
-                    <p className="text-muted-foreground">Extracting text using AI OCR technology</p>
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 mx-auto mb-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-xl font-semibold mb-2">Processing your image...</p>
+                    <p className="text-muted-foreground">Using AI OCR to extract text in Hindi and English</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <p className="text-green-600 font-medium">✅ OCR processing complete!</p>
+                    <div className="flex items-center gap-2 text-green-600 font-medium text-lg">
+                      <CheckCircle className="w-5 h-5" />
+                      OCR processing complete!
+                    </div>
                     <div className="grid gap-3">
-                      {ocrResults.map((result) => (
-                        <div key={result.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                          <span className="font-medium">{result.text}</span>
-                          <Badge variant="outline">{result.normalized}</Badge>
+                      {ocrResults.map((result, index) => (
+                        <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-lg border border-primary/20">
+                          <span className="font-medium text-lg">{result.item_name}</span>
+                          <Badge variant="outline" className="text-sm">
+                            {result.normalized_name}
+                          </Badge>
                         </div>
                       ))}
                     </div>
@@ -228,17 +289,19 @@ export const MainApp = ({ onBack }: MainAppProps) => {
         {currentStep === 2 && (
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Price Comparison Results</h2>
-              <p className="text-muted-foreground">
+              <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
+                Price Comparison Results
+              </h2>
+              <p className="text-muted-foreground text-lg">
                 AI has found the best prices across JioMart and BigBasket
               </p>
             </div>
             
             {isProcessing ? (
-              <Card className="max-w-2xl mx-auto">
-                <CardContent className="text-center py-8">
-                  <div className="w-16 h-16 mx-auto mb-4 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-lg font-medium">Comparing prices...</p>
+              <Card className="max-w-2xl mx-auto border-primary/20 shadow-lg">
+                <CardContent className="text-center py-12">
+                  <div className="w-20 h-20 mx-auto mb-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-xl font-semibold mb-2">Comparing prices...</p>
                   <p className="text-muted-foreground">Searching across multiple platforms</p>
                 </CardContent>
               </Card>
@@ -251,52 +314,82 @@ export const MainApp = ({ onBack }: MainAppProps) => {
         {currentStep === 3 && (
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Cart Automation</h2>
-              <p className="text-muted-foreground">
+              <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
+                Cart Automation
+              </h2>
+              <p className="text-muted-foreground text-lg">
                 Ready to add items to your cart on the recommended platforms
               </p>
             </div>
 
-            <Card>
+            <Card className="border-primary/20 shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5" />
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center">
+                    <Download className="w-4 h-4 text-white" />
+                  </div>
                   Cart Summary
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3">
-                  {priceResults.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <CardContent className="space-y-6">
+                <div className="grid gap-4">
+                  {priceResults.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-secondary/5 to-accent/5 rounded-lg border border-secondary/20">
                       <div>
-                        <p className="font-medium">{item.item}</p>
-                        <p className="text-sm text-muted-foreground">{item.quantity}</p>
+                        <p className="font-semibold text-lg">{item.item}</p>
+                        <p className="text-muted-foreground">{item.quantity}</p>
                       </div>
                       <div className="text-right">
-                        <Badge variant={item.recommendedPlatform === 'JioMart' ? 'default' : 'secondary'}>
-                          {item.recommendedPlatform}
+                        <Badge 
+                          variant={item.recommendedPlatform === 'jiomart' ? 'default' : 'secondary'}
+                          className="mb-2"
+                        >
+                          {item.recommendedPlatform === 'jiomart' ? 'JioMart' : 'BigBasket'}
                         </Badge>
-                        <p className="text-sm font-medium mt-1">₹{Math.min(item.jioMartPrice, item.bigBasketPrice)}</p>
+                        <p className="font-bold text-lg">₹{Math.min(item.jioMartPrice, item.bigBasketPrice)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center text-lg font-semibold">
-                    <span>Total Savings:</span>
-                    <span className="text-green-600">₹{priceResults.reduce((sum, item) => sum + item.savings, 0)}</span>
+                <div className="border-t pt-6">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-semibold">Total Savings:</span>
+                    <span className="text-2xl font-bold text-green-600">
+                      ₹{priceResults.reduce((sum, item) => sum + item.savings, 0)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex gap-4 pt-4">
-                  <Button variant="hero" className="flex-1" onClick={handleCartAutomation}>
-                    Add to Cart Automatically
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    <Eye className="w-4 h-4 mr-2" />
-                    Preview Items
-                  </Button>
+                <div className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      onClick={() => handleCartAutomation('jiomart')}
+                      disabled={isProcessing}
+                      className="bg-primary text-white font-medium"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        "Add to JioMart"
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => handleCartAutomation('bigbasket')}
+                      disabled={isProcessing}
+                      className="bg-secondary text-white font-medium"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        "Add to BigBasket"
+                      )}
+                    </Button>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground text-center">
+                    Items will be opened in new tabs for manual review and checkout
+                  </p>
                 </div>
               </CardContent>
             </Card>
