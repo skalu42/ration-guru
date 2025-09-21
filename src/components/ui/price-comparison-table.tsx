@@ -10,7 +10,7 @@ interface PriceComparisonItem {
   quantity: string;
   jioMartPrice: number;
   bigBasketPrice: number;
-  recommendedPlatform: 'JioMart' | 'BigBasket';
+  recommendedPlatform: 'jiomart' | 'bigbasket';
   savings: number;
 }
 
@@ -21,8 +21,8 @@ interface PriceComparisonTableProps {
 
 export const PriceComparisonTable = ({ items, className }: PriceComparisonTableProps) => {
   const totalSavings = items.reduce((sum, item) => sum + item.savings, 0);
-  const totalJioMart = items.reduce((sum, item) => sum + (item.recommendedPlatform === 'JioMart' ? Math.min(item.jioMartPrice, item.bigBasketPrice) : item.jioMartPrice), 0);
-  const totalBigBasket = items.reduce((sum, item) => sum + (item.recommendedPlatform === 'BigBasket' ? Math.min(item.jioMartPrice, item.bigBasketPrice) : item.bigBasketPrice), 0);
+  const totalJioMart = items.reduce((sum, item) => sum + (item.recommendedPlatform === 'jiomart' ? Math.min(item.jioMartPrice, item.bigBasketPrice) : item.jioMartPrice), 0);
+  const totalBigBasket = items.reduce((sum, item) => sum + (item.recommendedPlatform === 'bigbasket' ? Math.min(item.jioMartPrice, item.bigBasketPrice) : item.bigBasketPrice), 0);
 
   return (
     <Card className={cn("w-full", className)}>
@@ -63,7 +63,7 @@ export const PriceComparisonTable = ({ items, className }: PriceComparisonTableP
                   <TableCell className="text-center">
                     <div className={cn(
                       "flex items-center justify-center gap-1 font-medium",
-                      item.recommendedPlatform === 'JioMart' && item.jioMartPrice < item.bigBasketPrice ? "text-primary" : "text-muted-foreground"
+                      item.recommendedPlatform === 'jiomart' && item.jioMartPrice < item.bigBasketPrice ? "text-primary" : "text-muted-foreground"
                     )}>
                       <IndianRupee className="w-3 h-3" />
                       {item.jioMartPrice}
@@ -72,7 +72,7 @@ export const PriceComparisonTable = ({ items, className }: PriceComparisonTableP
                   <TableCell className="text-center">
                     <div className={cn(
                       "flex items-center justify-center gap-1 font-medium",
-                      item.recommendedPlatform === 'BigBasket' && item.bigBasketPrice < item.jioMartPrice ? "text-secondary" : "text-muted-foreground"
+                      item.recommendedPlatform === 'bigbasket' && item.bigBasketPrice < item.jioMartPrice ? "text-secondary" : "text-muted-foreground"
                     )}>
                       <IndianRupee className="w-3 h-3" />
                       {item.bigBasketPrice}
@@ -80,13 +80,13 @@ export const PriceComparisonTable = ({ items, className }: PriceComparisonTableP
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge 
-                      variant={item.recommendedPlatform === 'JioMart' ? 'default' : 'secondary'}
+                      variant={item.recommendedPlatform === 'jiomart' ? 'default' : 'secondary'}
                       className={cn(
                         "font-medium",
-                        item.recommendedPlatform === 'JioMart' ? "bg-primary" : "bg-secondary"
+                        item.recommendedPlatform === 'jiomart' ? "bg-primary" : "bg-secondary"
                       )}
                     >
-                      {item.recommendedPlatform}
+                      {item.recommendedPlatform === 'jiomart' ? 'JioMart' : 'BigBasket'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">

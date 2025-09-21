@@ -105,7 +105,7 @@ export const MainApp = ({ onBack }: MainAppProps) => {
         quantity: comp.quantity,
         jioMartPrice: comp.jiomart_price || 0,
         bigBasketPrice: comp.bigbasket_price || 0,
-        recommendedPlatform: (comp.recommended_platform === 'bigbasket' ? 'BigBasket' : 'JioMart') as 'JioMart' | 'BigBasket',
+        recommendedPlatform: comp.recommended_platform as 'jiomart' | 'bigbasket',
         savings: comp.savings || 0
       }));
       
@@ -138,8 +138,8 @@ export const MainApp = ({ onBack }: MainAppProps) => {
       // Get items for the selected platform
       const platformItems = priceResults
         .filter(item => 
-          (platform === 'jiomart' && item.recommendedPlatform === 'JioMart') ||
-          (platform === 'bigbasket' && item.recommendedPlatform === 'BigBasket')
+          (platform === 'jiomart' && item.recommendedPlatform === 'jiomart') ||
+          (platform === 'bigbasket' && item.recommendedPlatform === 'bigbasket')
         )
         .map(item => ({
           item_name: item.item,

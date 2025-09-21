@@ -17,7 +17,7 @@ export interface PriceComparison {
   quantity: string;
   jioMartPrice: number;
   bigBasketPrice: number;
-  recommendedPlatform: 'JioMart' | 'BigBasket';
+  recommendedPlatform: 'jiomart' | 'bigbasket';
   savings: number;
 }
 
@@ -105,7 +105,16 @@ class APIService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data || []) as PriceComparison[];
+    
+    return (data || []).map((comp: any) => ({
+      id: comp.id,
+      item: comp.item_name,
+      quantity: comp.quantity || '',
+      jioMartPrice: comp.jiomart_price || 0,
+      bigBasketPrice: comp.bigbasket_price || 0,
+      recommendedPlatform: comp.recommended_platform as 'jiomart' | 'bigbasket',
+      savings: comp.savings || 0
+    }));
   }
 
   async automateCart(listId: string, platform: 'jiomart' | 'bigbasket', items: any[]): Promise<CartSession> {
