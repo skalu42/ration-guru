@@ -182,6 +182,16 @@ export const MainApp = ({ onBack }: MainAppProps) => {
 
   const handleProductSearch = async (productName: string) => {
     try {
+      // Check if user is authenticated
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please log in to search for products.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsProcessing(true);
       setCurrentStep(2);
       
@@ -202,12 +212,14 @@ export const MainApp = ({ onBack }: MainAppProps) => {
       await comparePrices(list.id, searchItems);
     } catch (error) {
       console.error('Search Error:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to search for product";
       toast({
         title: "Search failed",
-        description: "Failed to search for product. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
       setCurrentStep(0);
+      setIsProcessing(false);
     }
   };
 
