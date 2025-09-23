@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StepIndicator } from "@/components/ui/step-indicator";
 import { ImageUpload } from "@/components/ui/image-upload";
-import { PriceComparisonTable } from "@/components/ui/price-comparison-table";
-import { ProductSearch } from "@/components/product-search";
-import { ArrowLeft, CheckCircle, Loader2, RotateCcw, Download, ExternalLink, LogOut } from "lucide-react";
+import { SearchAutocomplete } from "@/components/search-autocomplete";
+import { EnhancedResultsTable } from "@/components/enhanced-results-table";
+import { ArrowLeft, CheckCircle, Loader2, RotateCcw, LogOut, Search, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useSearchHistory } from "@/hooks/use-search-history";
 import { apiService, RationList, PriceComparison } from "@/services/api";
 
 interface MainAppProps {
@@ -18,6 +19,7 @@ interface MainAppProps {
 export const MainApp = ({ onBack }: MainAppProps) => {
   const { toast } = useToast();
   const { user, signOut } = useAuth();
+  const { searchHistory, addToHistory, clearHistory } = useSearchHistory();
   const [currentStep, setCurrentStep] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -130,46 +132,6 @@ export const MainApp = ({ onBack }: MainAppProps) => {
     }
   };
 
-  const handleCartAutomation = async (platform: 'jiomart' | 'bigbasket') => {
-    if (!currentList) return;
-    
-    try {
-      setIsProcessing(true);
-      
-      // Get items for the selected platform
-      const platformItems = priceResults
-        .filter(item => 
-          (platform === 'jiomart' && item.recommendedPlatform === 'jiomart') ||
-          (platform === 'bigbasket' && item.recommendedPlatform === 'bigbasket')
-        )
-        .map(item => ({
-          item_name: item.item,
-          quantity: item.quantity,
-          price: platform === 'jiomart' ? item.jioMartPrice : item.bigBasketPrice
-        }));
-
-      await apiService.automateCart(currentList.id, platform, platformItems);
-      
-      toast({
-        title: "Cart automation complete!",
-        description: "Items have been processed for your cart.",
-      });
-
-      // Open platform URL
-      const platformUrl = platform === 'jiomart' ? 'https://www.jiomart.com' : 'https://www.bigbasket.com';
-      window.open(platformUrl, '_blank');
-    } catch (error) {
-      console.error('Cart automation error:', error);
-      toast({
-        title: "Cart automation failed",
-        description: "Failed to automate cart. Please add items manually.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const resetProcess = () => {
     setCurrentStep(0);
     setUploadedFile(null);
@@ -195,6 +157,9 @@ export const MainApp = ({ onBack }: MainAppProps) => {
       setIsProcessing(true);
       setCurrentStep(2);
       
+      // Add to search history
+      await addToHistory(productName);
+      
       // Create a temporary ration list for the search
       const list = await apiService.createRationList(`Search: ${productName}`);
       setCurrentList(list);
@@ -219,6 +184,68 @@ export const MainApp = ({ onBack }: MainAppProps) => {
         variant: "destructive",
       });
       setCurrentStep(0);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCartAutomation = async (selections: Record<string, 'jiomart' | 'bigbasket'>) => {
+    if (!currentList) return;
+    
+    try {
+      setIsProcessing(true);
+      
+      // Group selections by platform
+      const jioMartItems: any[] = [];
+      const bigBasketItems: any[] = [];
+      
+      Object.entries(selections).forEach(([itemId, platform]) => {
+        const item = priceResults.find(p => p.id === itemId);
+        if (item) {
+          const itemData = {
+            item_name: item.item,
+            quantity: item.quantity,
+            price: platform === 'jiomart' ? item.jioMartPrice : item.bigBasketPrice
+          };
+          
+          if (platform === 'jiomart') {
+            jioMartItems.push(itemData);
+          } else {
+            bigBasketItems.push(itemData);
+          }
+        }
+      });
+      
+      // Process cart automation for each platform
+      const promises = [];
+      if (jioMartItems.length > 0) {
+        promises.push(apiService.automateCart(currentList.id, 'jiomart', jioMartItems));
+      }
+      if (bigBasketItems.length > 0) {
+        promises.push(apiService.automateCart(currentList.id, 'bigbasket', bigBasketItems));
+      }
+      
+      await Promise.all(promises);
+      
+      toast({
+        title: "Cart automation complete!",
+        description: `Items added to ${jioMartItems.length > 0 ? 'JioMart' : ''} ${bigBasketItems.length > 0 ? 'BigBasket' : ''} carts.`,
+      });
+
+      // Open platform URLs
+      if (jioMartItems.length > 0) {
+        window.open('https://www.jiomart.com', '_blank');
+      }
+      if (bigBasketItems.length > 0) {
+        window.open('https://www.bigbasket.com', '_blank');
+      }
+    } catch (error) {
+      console.error('Cart automation error:', error);
+      toast({
+        title: "Cart automation failed",
+        description: "Failed to automate cart. Please add items manually.",
+        variant: "destructive",
+      });
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -274,30 +301,49 @@ export const MainApp = ({ onBack }: MainAppProps) => {
 
         {/* Step Content */}
         {currentStep === 0 && (
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                Find Products & Compare Prices
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-hero bg-clip-text text-transparent">
+                Smart Grocery Price Comparison
               </h2>
-              <p className="text-muted-foreground text-lg">
-                Upload an image of your ration list or search for specific products
+              <p className="text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
+                Upload your grocery list or search for specific products to find the best prices across JioMart and BigBasket
               </p>
             </div>
             
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Upload Option */}
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-center">Upload Ration List</h3>
-                <p className="text-muted-foreground text-center">Upload an image or PDF</p>
-                <ImageUpload onImageUpload={handleImageUpload} />
-              </div>
-              
+            <div className="grid lg:grid-cols-2 gap-12">
               {/* Search Option */}
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-center">Search Products</h3>
-                <p className="text-muted-foreground text-center">Search by product name</p>
-                <ProductSearch onSearch={handleProductSearch} isLoading={isProcessing} />
-              </div>
+              <Card className="p-8 border-primary/20 shadow-elegant hover:shadow-glow transition-all duration-300">
+                <CardHeader className="text-center pb-6">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gradient-primary rounded-full flex items-center justify-center">
+                    <Search className="w-8 h-8 text-white" />
+                  </div>
+                  <CardTitle className="text-2xl mb-2">Search Products</CardTitle>
+                  <p className="text-muted-foreground">Find and compare prices for specific grocery items</p>
+                </CardHeader>
+                <CardContent>
+                  <SearchAutocomplete
+                    onSearch={handleProductSearch}
+                    isLoading={isProcessing}
+                    searchHistory={searchHistory}
+                    onClearHistory={clearHistory}
+                  />
+                </CardContent>
+              </Card>
+              
+              {/* Upload Option */}
+              <Card className="p-8 border-secondary/20 shadow-elegant hover:shadow-glow transition-all duration-300">
+                <CardHeader className="text-center pb-6">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gradient-secondary rounded-full flex items-center justify-center">
+                    <Upload className="w-8 h-8 text-white" />
+                  </div>
+                  <CardTitle className="text-2xl mb-2">Upload Grocery List</CardTitle>
+                  <p className="text-muted-foreground">Upload an image or PDF of your complete grocery list</p>
+                </CardHeader>
+                <CardContent>
+                  <ImageUpload onImageUpload={handleImageUpload} />
+                </CardContent>
+              </Card>
             </div>
           </div>
         )}
@@ -346,114 +392,34 @@ export const MainApp = ({ onBack }: MainAppProps) => {
         )}
 
         {currentStep === 2 && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="text-center">
-              <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
+              <h2 className="text-4xl font-bold mb-4 bg-gradient-hero bg-clip-text text-transparent">
                 Price Comparison Results
               </h2>
-              <p className="text-muted-foreground text-lg">
-                AI has found the best prices across JioMart and BigBasket
+              <p className="text-xl text-muted-foreground leading-relaxed">
+                AI has analyzed prices across platforms to find you the best deals
               </p>
             </div>
             
             {isProcessing ? (
-              <Card className="max-w-2xl mx-auto border-primary/20 shadow-lg">
-                <CardContent className="text-center py-12">
-                  <div className="w-20 h-20 mx-auto mb-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-xl font-semibold mb-2">Comparing prices...</p>
-                  <p className="text-muted-foreground">Searching across multiple platforms</p>
+              <Card className="max-w-2xl mx-auto border-primary/20 shadow-elegant">
+                <CardContent className="text-center py-16">
+                  <div className="w-24 h-24 mx-auto mb-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-2xl font-semibold mb-4">Comparing prices across platforms...</p>
+                  <p className="text-muted-foreground text-lg">This may take a few moments while we search for the best deals</p>
                 </CardContent>
               </Card>
             ) : (
-              <PriceComparisonTable items={priceResults} />
+              <EnhancedResultsTable 
+                items={priceResults} 
+                onCartAutomation={handleCartAutomation}
+                isLoading={isProcessing}
+              />
             )}
           </div>
         )}
 
-        {currentStep === 3 && (
-          <div className="max-w-2xl mx-auto space-y-6">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                Cart Automation
-              </h2>
-              <p className="text-muted-foreground text-lg">
-                Ready to add items to your cart on the recommended platforms
-              </p>
-            </div>
-
-            <Card className="border-primary/20 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center">
-                    <Download className="w-4 h-4 text-white" />
-                  </div>
-                  Cart Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4">
-                  {priceResults.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-secondary/5 to-accent/5 rounded-lg border border-secondary/20">
-                      <div>
-                        <p className="font-semibold text-lg">{item.item}</p>
-                        <p className="text-muted-foreground">{item.quantity}</p>
-                      </div>
-                      <div className="text-right">
-                        <Badge 
-                          variant={item.recommendedPlatform === 'jiomart' ? 'default' : 'secondary'}
-                          className="mb-2"
-                        >
-                          {item.recommendedPlatform === 'jiomart' ? 'JioMart' : 'BigBasket'}
-                        </Badge>
-                        <p className="font-bold text-lg">₹{Math.min(item.jioMartPrice, item.bigBasketPrice)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t pt-6">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xl font-semibold">Total Savings:</span>
-                    <span className="text-2xl font-bold text-green-600">
-                      ₹{priceResults.reduce((sum, item) => sum + item.savings, 0)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      onClick={() => handleCartAutomation('jiomart')}
-                      disabled={isProcessing}
-                      className="bg-primary text-white font-medium"
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        "Add to JioMart"
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => handleCartAutomation('bigbasket')}
-                      disabled={isProcessing}
-                      className="bg-secondary text-white font-medium"
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        "Add to BigBasket"
-                      )}
-                    </Button>
-                  </div>
-                  
-                  <p className="text-sm text-muted-foreground text-center">
-                    Items will be opened in new tabs for manual review and checkout
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </main>
     </div>
   );
