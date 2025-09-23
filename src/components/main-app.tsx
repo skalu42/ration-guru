@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { StepIndicator } from "@/components/ui/step-indicator";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { PriceComparisonTable } from "@/components/ui/price-comparison-table";
+import { ProductSearch } from "@/components/product-search";
 import { ArrowLeft, CheckCircle, Loader2, RotateCcw, Download, ExternalLink, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -179,6 +180,37 @@ export const MainApp = ({ onBack }: MainAppProps) => {
     setImageData('');
   };
 
+  const handleProductSearch = async (productName: string) => {
+    try {
+      setIsProcessing(true);
+      setCurrentStep(2);
+      
+      // Create a temporary ration list for the search
+      const list = await apiService.createRationList(`Search: ${productName}`);
+      setCurrentList(list);
+      
+      // Create a mock item for the search
+      const searchItems = [{ item_name: productName, quantity: "1" }];
+      setOcrResults(searchItems);
+      
+      toast({
+        title: "Starting search...",
+        description: `Searching for "${productName}" across platforms.`,
+      });
+      
+      // Start price comparison
+      await comparePrices(list.id, searchItems);
+    } catch (error) {
+      console.error('Search Error:', error);
+      toast({
+        title: "Search failed",
+        description: "Failed to search for product. Please try again.",
+        variant: "destructive",
+      });
+      setCurrentStep(0);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
   };
@@ -230,16 +262,31 @@ export const MainApp = ({ onBack }: MainAppProps) => {
 
         {/* Step Content */}
         {currentStep === 0 && (
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-                Upload Your Ration List
+                Find Products & Compare Prices
               </h2>
               <p className="text-muted-foreground text-lg">
-                Upload an image of your ration list in Hindi or English, or a PDF document
+                Upload an image of your ration list or search for specific products
               </p>
             </div>
-            <ImageUpload onImageUpload={handleImageUpload} />
+            
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Upload Option */}
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-center">Upload Ration List</h3>
+                <p className="text-muted-foreground text-center">Upload an image or PDF</p>
+                <ImageUpload onImageUpload={handleImageUpload} />
+              </div>
+              
+              {/* Search Option */}
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold text-center">Search Products</h3>
+                <p className="text-muted-foreground text-center">Search by product name</p>
+                <ProductSearch onSearch={handleProductSearch} isLoading={isProcessing} />
+              </div>
+            </div>
           </div>
         )}
 
